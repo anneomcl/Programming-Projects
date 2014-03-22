@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+//struct to contain inputs necessary for multi-threaded qsort
 typedef struct qsort_inputs 
 {
 	int * list;
@@ -11,6 +12,7 @@ typedef struct qsort_inputs
 	
 } qsort_inputs;
 
+//struct to contain inputs necessary for multi-threaded merge
 typedef struct merge_inputs 
 {
 	int * list1;
@@ -20,19 +22,22 @@ typedef struct merge_inputs
 	int new_size;
 } merge_inputs;
 
+//compare function necessary for qsort
 int cmpfunc (const void * a, const void * b)
 {
 	return ( *(int*)a - *(int*)b );
 }
 
+//qsort function that returns a void ptr 
 void * void_qsort(void * arg)
 { 
 	struct qsort_inputs* x = (struct qsort_inputs *) arg; 
-	qsort(x->list, x->num_to_sort, sizeof(int), cmpfunc); 
+	qsort(x->list, x->num_to_sort, sizeof(int), cmpfunc);
 	fprintf(stderr, "Sorted %d elements.\n", x->num_to_sort); 
 	return x->list; 
 }
 
+//merge function that returns a void ptr
 void * void_merge(void * arg)
 {
 	struct merge_inputs* x = (struct merge_inputs *) arg;
@@ -45,7 +50,7 @@ void * void_merge(void * arg)
 	for(i = 0; i < x->size1; i++)
 		temp_list1[i] = x->list1[i];
 
-	for(i = 0; i < x->new_size;)
+	for(i = 0; i < x->new_size;) //merging all values into list1, noting duplicate values in dupes
 	{
 		if(j < x->size1 && k < x->size2)
 		{
@@ -99,7 +104,7 @@ void * void_merge(void * arg)
 int main(int argc, char **argv)
 {
 
-	if(argc != 2) //if incorrec ‘int’)
+	if(argc != 2) //if invalid argument size
 	{
 		printf("ERROR\n"); 
 		return 0;
@@ -128,13 +133,13 @@ int main(int argc, char **argv)
 	int values_per_segment; //determine values per segment
 	int remainder = 0;
 
-	if (input_count % segment_count == 0)
+	if (input_count % segment_count == 0) //determine number of segments
 	{
     		values_per_segment = input_count / segment_count;
 		remainder = values_per_segment;
 	}
 
-	else
+	else //if segments don't divide evenly, set a remainder
 	{
     		values_per_segment = (input_count / segment_count) + 1;
 		remainder = input_count - (values_per_segment * (segment_count - 1));
@@ -143,33 +148,33 @@ int main(int argc, char **argv)
 	struct qsort_inputs* qin_list = malloc(sizeof(struct qsort_inputs) * segment_count); //list of "n" structs for qsort input
 	
 	int i;
-	for(i = 0; i < segment_count; i++)
+	for(i = 0; i < segment_count; i++) //initialize list of structs
 	{	
 		int index = i * values_per_segment;
 		qin_list[i].list = input_list + index;
 		qin_list[i].num_to_sort = values_per_segment;
 	}
  
-	qin_list[segment_count - 1].num_to_sort = remainder;
+	qin_list[segment_count - 1].num_to_sort = remainder; //set the remainder
 
-	pthread_t thread_name[segment_count];
+	pthread_t thread_name[segment_count]; //initialize array of threads
 
 	for(i = 0; i < segment_count; i++)
 	{ 
-		pthread_create(&thread_name[i], NULL, void_qsort, &qin_list[i]);
+		pthread_create(&thread_name[i], NULL, void_qsort, &qin_list[i]); //perform multi-threaded qsort
 	}
 
 	for(i = 0; i <segment_count; i++)
 	{ 
-		pthread_join(thread_name[i], NULL); 
+		pthread_join(thread_name[i], NULL); //join all threads
 	}
 
-	while(segment_count > 1)
+	while(segment_count > 1) //while there are still multiple lists to be merged
 	{	 	
-		int merge_count = segment_count/2; 
-		struct merge_inputs* merge_list = malloc(sizeof(merge_inputs) * merge_count); 
+		int merge_count = segment_count/2; //find number of times to execute merge
+		struct merge_inputs* merge_list = malloc(sizeof(merge_inputs) * merge_count); //array of structs for merge inputs
 
-		for(i = 0; i < segment_count - 1 ; i += 2)
+		for(i = 0; i < segment_count - 1 ; i += 2) //set all merge structs to their proper values
 		{ 
 			merge_list[i/2].list1 = qin_list[i].list;
 			merge_list[i/2].list2 = qin_list[i+1].list;
@@ -178,29 +183,29 @@ int main(int argc, char **argv)
 			merge_list[i/2].new_size = qin_list[i].num_to_sort + qin_list[i+1].num_to_sort;
 		} 
 	
-		pthread_t thread_name[merge_count];
+		pthread_t thread_name[merge_count]; //initialize array of threads
 
 		for(i = 0; i < merge_count; i++)
 		{ 
-			pthread_create(&thread_name[i], NULL, void_merge, &merge_list[i]); 
+			pthread_create(&thread_name[i], NULL, void_merge, &merge_list[i]); //perform multi-threaded merge
 		} 
 	
 		for(i = 0; i < merge_count;i++)
 		{ 
-			pthread_join(thread_name[i],NULL); 
+			pthread_join(thread_name[i],NULL); //join threads
 		} 
 	
 		int new_segment_size = segment_count - merge_count; //merge_count + segment_count%2
 	
 		for(i = 0; i < new_segment_size; i++)
 		{ 
-			if(segment_count%2 && i == new_segment_size - 1)
+			if(segment_count%2 && i == new_segment_size - 1) //set new values if there is a remainder
 			{
 				qin_list[i].list = qin_list[segment_count - 1].list; 
 				qin_list[i].num_to_sort = qin_list[segment_count - 1].num_to_sort; 
 			} 
 	
-			else
+			else //set new values assuming all segments are even
 			{
 				qin_list[i].list = merge_list[i].list1; 
 				qin_list[i].num_to_sort = merge_list[i].new_size;
@@ -213,7 +218,7 @@ int main(int argc, char **argv)
 
 	int a;
 	for(a = 0; a < input_count; a++)
-		printf("%d\n", qin_list[0].list[a]);
+		printf("%d\n", qin_list[0].list[a]); //print all values
 
 //freeing memory
 	free(input_list);
